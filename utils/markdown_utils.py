@@ -223,21 +223,31 @@ class MarkdownConverter:
     
     def _handle_figure(self, text: str, section_count: int) -> str:
         """
-        Convert base64 encoded image to markdown image syntax
+        Handle figure content
         """
         try:
-            # Determine image format (assuming PNG if not specified)
-            img_format = "png"
+            # Check if it's a file path starting with "figures/"
+            if text.startswith("figures/"):
+                # Convert to relative path from markdown directory to figures directory
+                relative_path = f"../{text}"
+                return f"![Figure {section_count}]({relative_path})\n\n"
+
+            # Check if it's already a markdown format image link
+            if text.startswith("!["):
+                # Already in markdown format, return directly
+                return f"{text}\n\n"
+
+            # If it's still base64 format, maintain original logic
             if text.startswith("data:image/"):
-                # Extract format from data URI
-                img_format = text.split(";")[0].split("/")[1]
+                return f"![Figure {section_count}]({text})\n\n"
             elif ";" in text and "," in text:
-                # Already in data URI format
                 return f"![Figure {section_count}]({text})\n\n"
             else:
-                # Raw base64, convert to data URI
+                # Assume it's raw base64, convert to data URI
+                img_format = "png"
                 data_uri = f"data:image/{img_format};base64,{text}"
                 return f"![Figure {section_count}]({data_uri})\n\n"
+                
         except Exception as e:
             print(f"_handle_figure error: {str(e)}")
             return f"*[Error processing figure: {str(e)}]*\n\n"

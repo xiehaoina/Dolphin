@@ -6,6 +6,7 @@ SPDX-License-Identifier: MIT
 import copy
 import json
 import os
+import io
 import re
 from dataclasses import dataclass
 from typing import List, Tuple
@@ -14,11 +15,158 @@ import albumentations as alb
 import cv2
 import numpy as np
 from albumentations.pytorch import ToTensorV2
+import pymupdf
 from PIL import Image
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from torchvision.transforms.functional import resize
 
 from utils.markdown_utils import MarkdownConverter
+
+
+def save_figure_to_local(pil_crop, save_dir, image_name, reading_order):
+    """Save cropped figure to local file system
+    
+    Args:
+        pil_crop: PIL Image object of the cropped figure
+        save_dir: Base directory to save results
+        image_name: Name of the source image/document
+        reading_order: Reading order of the figure in the document
+        
+    Returns:
+        str: Filename of the saved figure
+    """
+    try:
+        # Create figures directory if it doesn't exist
+        figures_dir = os.path.join(save_dir, "markdown", "figures")
+        # os.makedirs(figures_dir, exist_ok=True)
+        
+        # Generate figure filename
+        figure_filename = f"{image_name}_figure_{reading_order:03d}.png"
+        figure_path = os.path.join(figures_dir, figure_filename)
+        
+        # Save the figure
+        pil_crop.save(figure_path, format="PNG", quality=95)
+        
+        # print(f"Saved figure: {figure_filename}")
+        return figure_filename
+        
+    except Exception as e:
+        print(f"Error saving figure: {str(e)}")
+        # Return a fallback filename
+        return f"{image_name}_figure_{reading_order:03d}_error.png"
+
+
+def convert_pdf_to_images(pdf_path, target_size=896):
+    """Convert PDF pages to images
+    
+    Args:
+        pdf_path: Path to PDF file
+        target_size: Target size for the longest dimension
+        
+    Returns:
+        List of PIL Images
+    """
+    images = []
+    try:
+        doc = pymupdf.open(pdf_path)
+        
+        for page_num in range(len(doc)):
+            page = doc[page_num]
+            
+            # Calculate scale to make longest dimension equal to target_size
+            rect = page.rect
+            scale = target_size / max(rect.width, rect.height)
+            
+            # Render page as image
+            mat = pymupdf.Matrix(scale, scale)
+            pix = page.get_pixmap(matrix=mat)
+            
+            # Convert to PIL Image
+            img_data = pix.tobytes("png")
+            pil_image = Image.open(io.BytesIO(img_data))
+            images.append(pil_image)
+        
+        doc.close()
+        print(f"Successfully converted {len(images)} pages from PDF")
+        return images
+        
+    except Exception as e:
+        print(f"Error converting PDF to images: {str(e)}")
+        return []
+
+
+def is_pdf_file(file_path):
+    """Check if file is a PDF"""
+    return file_path.lower().endswith('.pdf')
+
+
+def save_combined_pdf_results(all_page_results, pdf_path, save_dir):
+    """Save combined results for multi-page PDF with both JSON and Markdown
+    
+    Args:
+        all_page_results: List of results for all pages
+        pdf_path: Path to original PDF file
+        save_dir: Directory to save results
+        
+    Returns:
+        Path to saved combined JSON file
+    """
+    # Create output filename based on PDF name
+    base_name = os.path.splitext(os.path.basename(pdf_path))[0]
+    
+    # Prepare combined results
+    combined_results = {
+        "source_file": pdf_path,
+        "total_pages": len(all_page_results),
+        "pages": all_page_results
+    }
+    
+    # Save combined JSON results
+    json_filename = f"{base_name}.json"
+    json_path = os.path.join(save_dir, "recognition_json", json_filename)
+    os.makedirs(os.path.dirname(json_path), exist_ok=True)
+    
+    with open(json_path, 'w', encoding='utf-8') as f:
+        json.dump(combined_results, f, indent=2, ensure_ascii=False)
+    
+    # Generate and save combined markdown
+    try:
+        markdown_converter = MarkdownConverter()
+        
+        # Combine all page results into a single list for markdown conversion
+        all_elements = []
+        for page_data in all_page_results:
+            page_elements = page_data.get("elements", [])
+            if page_elements:
+                # Add page separator if not the first page
+                if all_elements:
+                    all_elements.append({
+                        "label": "page_separator",
+                        "text": f"\n\n---\n\n",
+                        "reading_order": len(all_elements)
+                    })
+                all_elements.extend(page_elements)
+        
+        # Generate markdown content
+        markdown_content = markdown_converter.convert(all_elements)
+        
+        # Save markdown file
+        markdown_filename = f"{base_name}.md"
+        markdown_path = os.path.join(save_dir, "markdown", markdown_filename)
+        os.makedirs(os.path.dirname(markdown_path), exist_ok=True)
+        
+        with open(markdown_path, 'w', encoding='utf-8') as f:
+            f.write(markdown_content)
+            
+        # print(f"Combined markdown saved to: {markdown_path}")
+        
+    except ImportError:
+        print("MarkdownConverter not available, skipping markdown generation")
+    except Exception as e:
+        print(f"Error generating markdown: {e}")
+    
+    # print(f"Combined JSON results saved to: {json_path}")
+    return json_path
 
 
 def alb_wrapper(transform):
@@ -302,13 +450,12 @@ def prepare_image(image) -> Tuple[np.ndarray, ImageDimensions]:
         return np.zeros((h, w, 3), dtype=np.uint8), dimensions
 
 
-
-
 def setup_output_dirs(save_dir):
     """Create necessary output directories"""
     os.makedirs(save_dir, exist_ok=True)
     os.makedirs(os.path.join(save_dir, "markdown"), exist_ok=True)
     os.makedirs(os.path.join(save_dir, "recognition_json"), exist_ok=True)
+    os.makedirs(os.path.join(save_dir, "markdown", "figures"), exist_ok=True)
 
 
 def save_outputs(recognition_results, image_path, save_dir):

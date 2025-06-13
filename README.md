@@ -9,7 +9,7 @@
   <a href="https://huggingface.co/ByteDance/Dolphin">
     <img src="https://img.shields.io/badge/HuggingFace-Dolphin-yellow">
   </a>
-  <a href="http://115.190.42.15:8888/dolphin/">
+  <a href="https://huggingface.co/spaces/ByteDance/Dolphin">
     <img src="https://img.shields.io/badge/Demo-Dolphin-blue">
   </a>
   <a href="https://github.com/bytedance/Dolphin">
@@ -50,6 +50,7 @@ Try our demo on [Demo-Dolphin](http://115.190.42.15:8888/dolphin/).
 
 
 ## 📅 Changelog
+- 🔥 **2025.06.13** Added multi-page PDF document parsing capability.
 - 🔥 **2025.05.21** Our demo is released at [link](http://115.190.42.15:8888/dolphin/). Check it out!
 - 🔥 **2025.05.20** The pretrained model and inference code of Dolphin are released.
 - 🔥 **2025.05.16** Our paper has been accepted by ACL 2025. Paper link: [arXiv](https://arxiv.org/abs/2505.14059).
@@ -88,7 +89,7 @@ Try our demo on [Demo-Dolphin](http://115.190.42.15:8888/dolphin/).
 ## ⚡ Inference
 
 Dolphin provides two inference frameworks with support for two parsing granularities:
-- **Page-level Parsing**: Parse the entire document image into a structured JSON and Markdown format
+- **Page-level Parsing**: Parse the entire document page into a structured JSON and Markdown format
 - **Element-level Parsing**: Parse individual document elements (text, table, formula)
 
 ### 📄 Page-level Parsing
@@ -99,7 +100,10 @@ Dolphin provides two inference frameworks with support for two parsing granulari
 # Process a single document image
 python demo_page.py --config ./config/Dolphin.yaml --input_path ./demo/page_imgs/page_1.jpeg --save_dir ./results
 
-# Process all document images in a directory
+# Process a single document pdf
+python demo_page.py --config ./config/Dolphin.yaml --input_path ./demo/page_imgs/page_6.pdf --save_dir ./results
+
+# Process all documents in a directory
 python demo_page.py --config ./config/Dolphin.yaml --input_path ./demo/page_imgs --save_dir ./results
 
 # Process with custom batch size for parallel element decoding
@@ -112,7 +116,10 @@ python demo_page.py --config ./config/Dolphin.yaml --input_path ./demo/page_imgs
 # Process a single document image
 python demo_page_hf.py --model_path ./hf_model --input_path ./demo/page_imgs/page_1.jpeg --save_dir ./results
 
-# Process all document images in a directory
+# Process a single document pdf
+python demo_page_hf.py --model_path ./hf_model --input_path ./demo/page_imgs/page_6.pdf --save_dir ./results
+
+# Process all documents in a directory
 python demo_page_hf.py --model_path ./hf_model --input_path ./demo/page_imgs --save_dir ./results
 
 # Process with custom batch size for parallel element decoding
@@ -175,11 +182,11 @@ We would like to acknowledge the following open-source projects that provided in
 If you find this code useful for your research, please use the following BibTeX entry.
 
 ```bibtex
-@inproceedings{dolphin2025,
+@article{feng2025dolphin,
   title={Dolphin: Document Image Parsing via Heterogeneous Anchor Prompting},
-  author={Feng, Hao and Wei, Shu and Fei, Xiang and Shi, Wei and Han, Yingdong and Liao, Lei and Lu, Jinghui and Wu, Binghong and Liu, Qi and Lin, Chunhui and Tang, Jingqun and Liu, Hao and Huang, Can},
-  year={2025},
-  booktitle={Proceedings of the 65rd Annual Meeting of the Association for Computational Linguistics (ACL)}
+  author={Feng, Hao and Wei, Shu and Fei, Xiang and Shi, Wei and Han, Yingdong and Liao, Lei and Lu, Jinghui and Wu, Binghong and Liu, Qi and Lin, Chunhui and others},
+  journal={arXiv preprint arXiv:2505.14059},
+  year={2025}
 }
 ```
 
