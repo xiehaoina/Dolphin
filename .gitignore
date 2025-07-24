@@ -1,5 +1,5 @@
 # Byte-compiled / optimized / DLL files
-__pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
 
@@ -152,3 +152,9 @@ Desktop.ini
 
 fusion_result.json
 kernel_meta/
+
+# Dolphin project specific
+.vercel/
+checkpoints/
+hf_model/
+results/
