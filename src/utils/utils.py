@@ -16,7 +16,7 @@ import numpy as np
 import pymupdf
 from PIL import Image, ImageDraw, ImageFont
 
-from utils.markdown_utils import MarkdownConverter
+from src.utils.markdown_utils import MarkdownConverter
 
 
 def save_figure_to_local(pil_crop, save_dir, image_name, reading_order):

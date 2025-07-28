@@ -6,16 +6,19 @@ SPDX-License-Identifier: MIT
 import argparse
 import glob
 import os
+import sys
 
 import cv2
 import torch
 from PIL import Image
 from transformers import AutoProcessor, VisionEncoderDecoderModel
 
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.insert(0, project_root)
 from src.utils.utils import *
 
 
-class VEIDolphin:
+class DOLPHIN:
     def __init__(self, model_id_or_path):
         """Initialize the Hugging Face model
         
@@ -169,7 +172,7 @@ def process_single_image(image, model, save_dir, image_name, max_batch_size=None
     """
     # Stage 1: Page-level layout and reading order parsing
     layout_output = model.chat("Parse the reading order of this document.", image)
-    
+    print(layout_output)
     # Stage 2: Element-level content parsing
     padded_image, dims = prepare_image(image)
     recognition_results = process_elements(layout_output, padded_image, dims, model, max_batch_size, save_dir, image_name)
