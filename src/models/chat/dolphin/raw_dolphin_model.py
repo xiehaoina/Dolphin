@@ -20,7 +20,7 @@ from transformers import PreTrainedTokenizerFast
 
 from src.models.chat.chat_model import ChatModel
 from src.models.chat.dolphin.model import DonutConfig, DonutModel, SwinEncoder
-from src.utils.processor import DolphinProcessor
+from src.models.chat.dolphin.processor import DolphinProcessor
 
 
 def try_rename_lagacy_weights(ckpt, output_path=""):

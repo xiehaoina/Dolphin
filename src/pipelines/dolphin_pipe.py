@@ -1,11 +1,17 @@
 import os
 import glob
+from re import T
 import cv2
 from PIL import Image
 from typing import Any, List, Dict
+from loguru import logger
+import time
+from omegaconf import OmegaConf
+from torch import true_divide
 
 from src.pipelines.pipeline import Pipeline
 from src.models.factory import ChatModelFactory
+from src.utils.perf_timer import PerfTimer
 from src.utils.utils import (
     setup_output_dirs,
     save_figure_to_local,
@@ -33,15 +39,32 @@ class DolphinPipeline(Pipeline):
                     and 'max_batch_size'.
         """
         super().__init__(config)
+        self.timer = PerfTimer(debug=True)
+        
+        logger.info("Creating model...")
+        
+        self.timer.start_timer("create_dolphin_model")
         factory = ChatModelFactory()
         self.model = factory.create_model("hf_dolphin", self.config)
+        self.timer.stop_timer("create_dolphin_model")
+        
+        self.timer.start_timer("create_gateway_model")
+        config = OmegaConf.create({"url": "https://ai-gateway.vei.volces.com/v1", 
+                                 "model_name": "doubao-1.5-vision-pro", 
+                                 "api_key": "sk-b187cc92d38040cbbf76839f2ea5980cag5bv9m2r4j17vah",
+                                 "max_concurrency": 30})
+        self.gateway_model = factory.create_model("gateway", config)
+        self.timer.stop_timer("create_gateway_model")
+        
+        self.timer.log_timings()
         self.max_batch_size = getattr(self.config, "max_batch_size", 16)
 
-    def run(self, debug: bool , input_path: str, save_dir: str, **kwargs) -> List[str]:
+    def run(self, debug: bool, input_path: str, save_dir: str, **kwargs) -> List[str]:
         """
         Runs the full document processing pipeline on a given input path.
 
         Args:
+            debug: If True, enables performance logging.
             input_path: Path to an input image/PDF or a directory of files.
             save_dir: Directory to save the parsing results.
             **kwargs: Additional arguments (not used in this implementation).
@@ -49,25 +72,36 @@ class DolphinPipeline(Pipeline):
         Returns:
             A list of paths to the generated JSON result files.
         """
+        if debug:
+            self.timer.enable()
+        else:
+            self.timer.disable()
+
+        self.timer.start_timer("total_run")
+
         document_files = self._collect_files(input_path)
+
         if not document_files:
-            print(f"No supported files found in {input_path}")
+            logger.warning(f"No supported files found in {input_path}")
             return []
 
         setup_output_dirs(save_dir)
-        print(f"\nTotal files to process: {len(document_files)}")
+        logger.info(f"Total files to process: {len(document_files)}")
 
         result_paths = []
         for file_path in document_files:
-            print(f"\nProcessing {file_path}")
+            logger.info(f"Processing {file_path}")
             try:
                 json_path, _ = self._process_document(file_path, save_dir)
                 if json_path:
                     result_paths.append(json_path)
-                print(f"Processing completed. Results saved to {save_dir}")
+                logger.info(f"Processing completed. Results saved to {save_dir}")
             except Exception as e:
-                print(f"Error processing {file_path}: {str(e)}")
+                logger.error(f"Error processing {file_path}: {e}")
                 continue
+
+        self.timer.stop_timer("total_run")
+        self.timer.log_timings()
         return result_paths
 
     def _collect_files(self, input_path: str) -> List[str]:
@@ -87,7 +121,9 @@ class DolphinPipeline(Pipeline):
     def _process_document(self, doc_path: str, save_dir: str) -> (str, List[Dict]):
         """Processes a single document, handling both PDF and image formats."""
         if doc_path.lower().endswith(".pdf"):
+            self.timer.start_timer("convert_pdf_to_images")
             images = convert_pdf_to_images(doc_path)
+            self.timer.stop_timer("convert_pdf_to_images")
             all_results = []
             for i, image in enumerate(images):
                 page_name = f"{os.path.splitext(os.path.basename(doc_path))[0]}_page_{i+1:03d}"
@@ -100,11 +136,20 @@ class DolphinPipeline(Pipeline):
             image_name = os.path.splitext(os.path.basename(doc_path))[0]
             return self._process_single_image(image, save_dir, image_name)
 
-    def _process_single_image(self, image: Image.Image, save_dir: str, image_name: str, save_individual: bool = True) -> (str, List[Dict]):
+    def _process_single_image(
+        self, image: Image.Image, save_dir: str, image_name: str, save_individual: bool = True
+    ) -> (str, List[Dict]):
         """Processes a single image page."""
-        layout_output = self.model.inference("Parse the reading order of this document.", image)
+        self.timer.start_timer("layout_analysis")
+        layout_output = self.model.inference(
+            "Parse the reading order of this document.", image
+        )
+        self.timer.stop_timer("layout_analysis")
         padded_image, dims = prepare_image(image)
-        recognition_results = self._process_elements(layout_output, padded_image, dims, save_dir, image_name)
+
+        recognition_results = self._process_elements(
+            layout_output, padded_image, dims, save_dir, image_name
+        )
 
         json_path = None
         if save_individual:
@@ -138,7 +183,7 @@ class DolphinPipeline(Pipeline):
                         text_elements.append(element_info)
                 reading_order += 1
             except Exception as e:
-                print(f"Error processing bbox with label {label}: {e}")
+                logger.error(f"Error processing bbox with label {label}: {e}")
                 continue
 
         recognition_results = figure_results
@@ -154,11 +199,14 @@ class DolphinPipeline(Pipeline):
         """Processes a batch of elements with the same prompt."""
         results = []
         for i in range(0, len(elements), self.max_batch_size):
-            batch = elements[i:i+self.max_batch_size]
+            batch = elements[i : i + self.max_batch_size]
             crops = [elem["crop"] for elem in batch]
             prompts = [prompt] * len(crops)
+
+            self.timer.start_timer("batch_inference")
             batch_results = self.model.batch_inference(prompts, crops)
-            
+            self.timer.stop_timer("batch_inference")
+
             for j, result_text in enumerate(batch_results):
                 elem = batch[j]
                 del elem["crop"]

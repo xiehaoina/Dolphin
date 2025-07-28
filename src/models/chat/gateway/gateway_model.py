@@ -3,12 +3,12 @@ from openai import OpenAI
 import asyncio
 import random
 from PIL import Image
-from typing import List,  Any
+from typing import List, Any
 from loguru import logger
-import time
 
 from src.utils.load_image import load_image, encode_image_base64
 from src.models.chat.chat_model import ChatModel
+from src.utils.perf_timer import PerfTimer
 
 
 class GatewayModel(ChatModel):
@@ -33,6 +33,8 @@ class GatewayModel(ChatModel):
         self.api_key = getattr(config, 'api_key', None)
         self.base_url = getattr(config, 'url', None)
         self.max_concurrency = getattr(config, 'max_concurrency', 10)
+        debug = getattr(config, "debug", True)
+        self.timer = PerfTimer(debug=debug)
 
         if not self.base_url:
             raise ValueError("API 'url' must be provided in the config.")
@@ -62,48 +64,53 @@ class GatewayModel(ChatModel):
         image_base64 = encode_image_base64(image)
         return image_base64, img_format.lower()
 
-    async def _call_openai_api(self, image: Image.Image, prompt: str, semaphore: asyncio.Semaphore):
+    async def _call_openai_api(
+        self, image: Image.Image, prompt: str, semaphore: asyncio.Semaphore
+    ):
         async with semaphore:
             retries = 5
             delay = 1
             for i in range(retries):
                 try:
-                    start_time = time.time()
+                    self.timer.start_timer("vlm_inference_call")
                     loaded_image = load_image(image, max_size=1600)
                     img_base64, img_type = self.img2base64(loaded_image)
 
-                    messages = [{
-                        "role": "user",
-                        "content": [
-                            {"type": "image_url", "image_url": {"url": f"data:image/{img_type};base64,{img_base64}"}},
-                            {"type": "text", "text": prompt}
-                        ],
-                    }]
+                    messages = [
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:image/{img_type};base64,{img_base64}"
+                                    },
+                                },
+                                {"type": "text", "text": prompt},
+                            ],
+                        }
+                    ]
                     response = self.client.chat.completions.create(
-                        model=self.model_name,
-                        messages=messages,
-                        timeout=120
+                        model=self.model_name, messages=messages, timeout=120
                     )
-                    #response = await self.async_client.post(
-                    #    f"{self.base_url}/chat/completions",
-                    #    headers={"Authorization": f"Bearer {self.api_key}"},
-                    #    json={"model": self.model_name, "messages": messages},
-                    #    timeout=120
-                    #)
-                    duration = time.time() - start_time
-                    logger.debug(f'VLM infer duration: {duration:.2f}s, image base64 size:{len(img_base64)}')
+                    self.timer.stop_timer("vlm_inference_call")
+                    #logger.debug(f"VLM image base64 size:{len(img_base64)}")
                     return response.choices[0].message.content
                 except httpx.HTTPStatusError as e:
+                    self.timer.stop_timer("vlm_inference_call")
                     if e.response.status_code == 429 and i < retries - 1:
-                        wait_time =  (delay * (2 ** i)) + (random.uniform(0, 1) * delay)
-                        logger.warning(f"Rate limit exceeded. Retrying in {wait_time:.2f} seconds...")
+                        wait_time = (delay * (2**i)) + (random.uniform(0, 1) * delay)
+                        logger.warning(
+                            f"Rate limit exceeded. Retrying in {wait_time:.2f} seconds..."
+                        )
                         await asyncio.sleep(wait_time)
                         delay *= 2
                     else:
-                        logger.error(f'VLM error: {e}')
+                        logger.error(f"VLM error: {e}")
                         return f"Error: {str(e)}"
                 except Exception as e:
-                    logger.error(f'VLM error: {e}')
+                    self.timer.stop_timer("vlm_inference_call")
+                    logger.error(f"VLM error: {e}")
                     return f"Error: {str(e)}"
             return "Error: Max retries exceeded"
 
@@ -123,9 +130,15 @@ class GatewayModel(ChatModel):
         """
         return asyncio.run(self.async_batch_inference(images, prompts))
 
-    async def async_batch_inference(self, images: List[Image.Image], prompts: List[str]) -> List[str]:
+    async def async_batch_inference(
+        self, images: List[Image.Image], prompts: List[str]
+    ) -> List[str]:
         semaphore = asyncio.Semaphore(self.max_concurrency)
-        tasks = [self._call_openai_api( image, prompt, semaphore) for image, prompt in zip(images, prompts)]
+        tasks = [
+            self._call_openai_api(image, prompt, semaphore)
+            for image, prompt in zip(images, prompts)
+        ]
         results = await asyncio.gather(*tasks)
-        logger.debug(f'VLM result size: {len(results)}')
+        logger.debug(f"VLM result size: {len(results)}")
+        self.timer.log_timings()
         return results
