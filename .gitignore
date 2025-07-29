@@ -156,6 +156,6 @@ kernel_meta/
 # Dolphin project specific
 .vercel/
 checkpoints/
-hf_model/
+model_weight/
 results/
 /examples/data/volc/

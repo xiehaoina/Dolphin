@@ -232,18 +232,7 @@ def adjust_box_edges(image, boxes: List[List[float]], max_pixels=15, threshold=0
     return new_boxes
 
 
-def parse_layout_string(bbox_str):
-    """Parse layout string using regular expressions"""
-    pattern = r"\[(\d*\.?\d+),\s*(\d*\.?\d+),\s*(\d*\.?\d+),\s*(\d*\.?\d+)\]\s*(\w+)"
-    matches = re.finditer(pattern, bbox_str)
 
-    parsed_results = []
-    for match in matches:
-        coords = [float(match.group(i)) for i in range(1, 5)]
-        label = match.group(5).strip()
-        parsed_results.append((coords, label))
-
-    return parsed_results
 
 
 @dataclass

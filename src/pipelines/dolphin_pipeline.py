@@ -5,12 +5,12 @@ import cv2
 from PIL import Image
 from typing import Any, List, Dict
 from loguru import logger
-import time
 from omegaconf import OmegaConf
-from torch import true_divide
+
 
 from src.pipelines.pipeline import Pipeline
 from src.models.factory import ChatModelFactory
+from src.pipelines.processor.layout.dolphin import DolphinLayoutProcessor
 from src.utils.perf_timer import PerfTimer
 from src.utils.utils import (
     setup_output_dirs,
@@ -18,7 +18,6 @@ from src.utils.utils import (
     prepare_image,
     convert_pdf_to_images,
     save_combined_pdf_results,
-    parse_layout_string,
     process_coordinates,
     save_outputs,
 )
@@ -55,7 +54,7 @@ class DolphinPipeline(Pipeline):
                                  "max_concurrency": 30})
         self.gateway_model = factory.create_model("gateway", config)
         self.timer.stop_timer("create_gateway_model")
-        
+        self.dolphin_layout_processor = DolphinLayoutProcessor(self.model)
         self.timer.log_timings()
         self.max_batch_size = getattr(self.config, "max_batch_size", 16)
 
@@ -98,7 +97,7 @@ class DolphinPipeline(Pipeline):
                 logger.info(f"Processing completed. Results saved to {save_dir}")
             except Exception as e:
                 logger.error(f"Error processing {file_path}: {e}")
-                continue
+                raise e
 
         self.timer.stop_timer("total_run")
         self.timer.log_timings()
@@ -141,15 +140,10 @@ class DolphinPipeline(Pipeline):
     ) -> (str, List[Dict]):
         """Processes a single image page."""
         self.timer.start_timer("layout_analysis")
-        layout_output = self.model.inference(
-            "Parse the reading order of this document.", image
-        )
+        layout_output = self.dolphin_layout_processor.process(image)
         self.timer.stop_timer("layout_analysis")
-        padded_image, dims = prepare_image(image)
 
-        recognition_results = self._process_elements(
-            layout_output, padded_image, dims, save_dir, image_name
-        )
+        recognition_results = self._process_elements(layout_output, save_dir, image_name)
 
         json_path = None
         if save_individual:
@@ -157,35 +151,21 @@ class DolphinPipeline(Pipeline):
             json_path = save_outputs(recognition_results, dummy_path, save_dir, image)
         return json_path, recognition_results
 
-    def _process_elements(self, layout_str: str, padded_image, dims, save_dir: str, image_name: str) -> List[Dict]:
+    def _process_elements(self, layout_results , save_dir: str, image_name: str) -> List[Dict]:
         """Parses all document elements from a layout string."""
-        layout_results = parse_layout_string(layout_str)
+        
         text_elements, table_elements, figure_results = [], [], []
-        previous_box = None
-        reading_order = 0
-
-        for bbox, label in layout_results:
-            try:
-                x1, y1, x2, y2, orig_x1, orig_y1, orig_x2, orig_y2, previous_box = process_coordinates(bbox, padded_image, dims, previous_box)
-                cropped = padded_image[y1:y2, x1:x2]
-
-                if cropped.size > 3 and cropped.shape[0] > 3 and cropped.shape[1] > 3:
-                    pil_crop = Image.fromarray(cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB))
-                    element_info = {"crop": pil_crop, "label": label, "bbox": [orig_x1, orig_y1, orig_x2, orig_y2], "reading_order": reading_order}
-                    
-                    if label == "fig":
-                        fig_filename = save_figure_to_local(pil_crop, save_dir, image_name, reading_order)
-                        del element_info["crop"]
-                        figure_results.append({**element_info, "text": f"![Figure](figures/{fig_filename})", "figure_path": f"figures/{fig_filename}"})
-                    elif label == "tab":
-                        table_elements.append(element_info)
-                    else:
-                        text_elements.append(element_info)
-                reading_order += 1
-            except Exception as e:
-                logger.error(f"Error processing bbox with label {label}: {e}")
-                continue
-
+        for element in layout_results:
+            #if element["crop"].size > 3 and element["crop"].shape[0] > 3 and element["crop"].shape[1] > 3:
+            if element["label"] == "fig":
+                fig_filename = save_figure_to_local(element["crop"], save_dir, image_name, element["reading_order"])
+                del element["crop"]
+                figure_results.append({**element, "text": f"![Figure](figures/{fig_filename})", "figure_path": f"figures/{fig_filename}"})
+            elif element["label"] == "tab":
+                table_elements.append(element)
+            else:
+                text_elements.append(element)
+        
         recognition_results = figure_results
         if text_elements:
             recognition_results.extend(self._process_element_batch(text_elements, "Read text in the image."))

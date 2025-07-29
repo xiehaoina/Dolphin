@@ -3,7 +3,7 @@ from PIL import Image
 from typing import List, Union
 from loguru import logger
 
-from src.utils.const.ocr_content_type import CategoryId
+from src.utils.const.content_type import CategoryId
 
 try:
     from paddlex import create_model

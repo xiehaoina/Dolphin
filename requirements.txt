@@ -9,3 +9,4 @@ torchvision==0.16.0
 transformers==4.47.0
 accelerate==1.6.0
 pymupdf==1.26
+fastapi==0.116.1
