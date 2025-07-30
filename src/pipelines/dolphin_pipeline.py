@@ -11,14 +11,17 @@ from omegaconf import OmegaConf
 from src.pipelines.pipeline import Pipeline
 from src.models.factory import ChatModelFactory
 from src.pipelines.processor.layout.dolphin import DolphinLayoutProcessor
+from src.pipelines.processor.processor import Processor
+from src.pipelines.processor.recognize.table.dolphin import DolphinTableProcessor
+from src.pipelines.processor.recognize.text.dolphin import DolphinTextProcessor
+from src.utils.enums.doc_element_type import BlockType
+
 from src.utils.perf_timer import PerfTimer
 from src.utils.utils import (
     setup_output_dirs,
     save_figure_to_local,
-    prepare_image,
     convert_pdf_to_images,
     save_combined_pdf_results,
-    process_coordinates,
     save_outputs,
 )
 
@@ -54,7 +57,9 @@ class DolphinPipeline(Pipeline):
                                  "max_concurrency": 30})
         self.gateway_model = factory.create_model("gateway", config)
         self.timer.stop_timer("create_gateway_model")
-        self.dolphin_layout_processor = DolphinLayoutProcessor(self.model)
+        self.layout_processor = DolphinLayoutProcessor(self.model)
+        self.table_processor = DolphinTableProcessor(self.model)
+        self.text_processor = DolphinTextProcessor(self.model)
         self.timer.log_timings()
         self.max_batch_size = getattr(self.config, "max_batch_size", 16)
 
@@ -140,7 +145,7 @@ class DolphinPipeline(Pipeline):
     ) -> (str, List[Dict]):
         """Processes a single image page."""
         self.timer.start_timer("layout_analysis")
-        layout_output = self.dolphin_layout_processor.process(image)
+        layout_output = self.layout_processor.process(image)
         self.timer.stop_timer("layout_analysis")
 
         recognition_results = self._process_elements(layout_output, save_dir, image_name)
@@ -157,35 +162,34 @@ class DolphinPipeline(Pipeline):
         text_elements, table_elements, figure_results = [], [], []
         for element in layout_results:
             #if element["crop"].size > 3 and element["crop"].shape[0] > 3 and element["crop"].shape[1] > 3:
-            if element["label"] == "fig":
+            if element["label"] == BlockType.Image.value:
                 fig_filename = save_figure_to_local(element["crop"], save_dir, image_name, element["reading_order"])
                 del element["crop"]
                 figure_results.append({**element, "text": f"![Figure](figures/{fig_filename})", "figure_path": f"figures/{fig_filename}"})
-            elif element["label"] == "tab":
+            elif element["label"] == BlockType.Table.value:
                 table_elements.append(element)
             else:
                 text_elements.append(element)
         
         recognition_results = figure_results
         if text_elements:
-            recognition_results.extend(self._process_element_batch(text_elements, "Read text in the image."))
+            recognition_results.extend(self._process_element_batch(text_elements, self.text_processor))
         if table_elements:
-            recognition_results.extend(self._process_element_batch(table_elements, "Parse the table in the image."))
+            recognition_results.extend(self._process_element_batch(table_elements, self.table_processor))
         
         recognition_results.sort(key=lambda x: x.get("reading_order", 0))
         return recognition_results
 
-    def _process_element_batch(self, elements: List[Dict], prompt: str) -> List[Dict]:
+    def _process_element_batch(self, elements: List[Dict], processsor: Processor) -> List[Dict]:
         """Processes a batch of elements with the same prompt."""
         results = []
         for i in range(0, len(elements), self.max_batch_size):
             batch = elements[i : i + self.max_batch_size]
             crops = [elem["crop"] for elem in batch]
-            prompts = [prompt] * len(crops)
 
-            self.timer.start_timer("batch_inference")
-            batch_results = self.model.batch_inference(prompts, crops)
-            self.timer.stop_timer("batch_inference")
+            self.timer.start_timer("batch_process")
+            batch_results = processsor.batch_process(crops)
+            self.timer.stop_timer("batch_process")
 
             for j, result_text in enumerate(batch_results):
                 elem = batch[j]

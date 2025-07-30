@@ -9,13 +9,15 @@ from src.utils.load_image import load_image,encode_image_base64
 
 
 logging.basicConfig(level=logging.INFO)
-config = OmegaConf.create({"model_id_or_path": "./model_weight/Dolphin/hf_model"})
-factory = ChatModelFactory()
-model = factory.create_model("hf_dolphin", config)
-layout_processor = DolphinLayoutProcessor(model)
 
 def handler(event, context):
     logging.info(f"received new request, event content: {event}")
+    
+    config = OmegaConf.create({"model_id_or_path": "./model_weight/Dolphin/hf_model"})
+    factory = ChatModelFactory()
+    model = factory.create_model("hf_dolphin", config)
+    layout_processor = DolphinLayoutProcessor(model)
+
     request = json.loads(event['body'])
     elements = layout_processor.process(load_image(request['image_url']['url']))
     for j, _ in enumerate(elements):
