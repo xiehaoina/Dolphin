@@ -3,8 +3,10 @@ import re
 from PIL import Image
 from typing import Any, List, Dict
 from loguru import logger
+
 from src.models.chat.chat_model import ChatModel
 from src.pipelines.processor.processor import Processor
+from src.utils.enums.doc_element_type import BlockType
 from src.utils.utils import (
     process_coordinates,
     prepare_image,
@@ -86,7 +88,7 @@ class DolphinLayoutProcessor(Processor):
                     pil_crop = Image.fromarray(cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB))
                     element_info = {
                         "crop": pil_crop,
-                        "label": label,
+                        "label": self._to_block_type(label),
                         "bbox": [orig_x1, orig_y1, orig_x2, orig_y2],
                         "reading_order": reading_order,
                     }
@@ -107,3 +109,24 @@ class DolphinLayoutProcessor(Processor):
             label = match.group(5).strip()
             parsed_results.append((coords, label))
         return parsed_results
+
+    def _to_block_type(self, label: str) -> str:
+        """Converts a raw model label to a structured BlockType value."""
+        label_map = {
+            'tab': BlockType.Table,
+            'fig': BlockType.Image,
+            'title': BlockType.Title,
+            'sec': BlockType.Section,
+            'sub_sec': BlockType.SubSection,
+            'list': BlockType.List,
+            'formula': BlockType.Formula,
+            'reference': BlockType.Text,
+            'alg': BlockType.Algorithm,
+            'para': BlockType.Text,
+            'header': BlockType.Header,
+            'footer': BlockType.Footer,
+        }
+        block_type = label_map.get(label, BlockType.Unknown)
+        if block_type == BlockType.Unknown:
+            logger.warning(f"Unknown label '{label}' encountered, mapping to 'unknown'.")
+        return block_type.value

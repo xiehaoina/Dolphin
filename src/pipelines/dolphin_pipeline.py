@@ -14,6 +14,7 @@ from src.pipelines.processor.layout.dolphin import DolphinLayoutProcessor
 from src.pipelines.processor.processor import Processor
 from src.pipelines.processor.recognize.table.dolphin import DolphinTableProcessor
 from src.pipelines.processor.recognize.text.dolphin import DolphinTextProcessor
+from src.pipelines.processor.merge.vlm_merge_processor import VLMMergeProcessor
 from src.utils.enums.doc_element_type import BlockType
 
 from src.utils.perf_timer import PerfTimer
@@ -52,14 +53,18 @@ class DolphinPipeline(Pipeline):
         
         self.timer.start_timer("create_gateway_model")
         config = OmegaConf.create({"url": "https://ai-gateway.vei.volces.com/v1", 
-                                 "model_name": "doubao-1.5-vision-pro", 
+                                 "model_name": "doubao-seed-1.6", 
                                  "api_key": "sk-b187cc92d38040cbbf76839f2ea5980cag5bv9m2r4j17vah",
+                                 "response_format": "json_object",
+                                 "thinking":"auto",
+                                 "timeout": 600,
                                  "max_concurrency": 30})
         self.gateway_model = factory.create_model("gateway", config)
         self.timer.stop_timer("create_gateway_model")
         self.layout_processor = DolphinLayoutProcessor(self.model)
         self.table_processor = DolphinTableProcessor(self.model)
         self.text_processor = DolphinTextProcessor(self.model)
+        self.merge_processor = VLMMergeProcessor(self.gateway_model)
         self.timer.log_timings()
         self.max_batch_size = getattr(self.config, "max_batch_size", 16)
 
@@ -96,7 +101,9 @@ class DolphinPipeline(Pipeline):
         for file_path in document_files:
             logger.info(f"Processing {file_path}")
             try:
+                self.timer.start_timer("process_document","total_run")
                 json_path, _ = self._process_document(file_path, save_dir)
+                self.timer.stop_timer("process_document")
                 if json_path:
                     result_paths.append(json_path)
                 logger.info(f"Processing completed. Results saved to {save_dir}")
@@ -125,7 +132,7 @@ class DolphinPipeline(Pipeline):
     def _process_document(self, doc_path: str, save_dir: str) -> (str, List[Dict]):
         """Processes a single document, handling both PDF and image formats."""
         if doc_path.lower().endswith(".pdf"):
-            self.timer.start_timer("convert_pdf_to_images")
+            self.timer.start_timer("convert_pdf_to_images","process_document")
             images = convert_pdf_to_images(doc_path)
             self.timer.stop_timer("convert_pdf_to_images")
             all_results = []
@@ -144,12 +151,17 @@ class DolphinPipeline(Pipeline):
         self, image: Image.Image, save_dir: str, image_name: str, save_individual: bool = True
     ) -> (str, List[Dict]):
         """Processes a single image page."""
-        self.timer.start_timer("layout_analysis")
+        self.timer.start_timer("layout_analysis","process_document")
         layout_output = self.layout_processor.process(image)
         self.timer.stop_timer("layout_analysis")
 
-        recognition_results = self._process_elements(layout_output, save_dir, image_name)
-
+        self.timer.start_timer("process_elements","process_document")
+        raw_recognition_results = self._process_elements(layout_output, save_dir, image_name)
+        self.timer.stop_timer("process_elements")
+        
+        self.timer.start_timer("refine_json","process_document")
+        recognition_results = self.merge_processor.process(raw_recognition_results, image)
+        self.timer.stop_timer("refine_json")
         json_path = None
         if save_individual:
             dummy_path = f"{image_name}.jpg"
@@ -186,11 +198,9 @@ class DolphinPipeline(Pipeline):
         for i in range(0, len(elements), self.max_batch_size):
             batch = elements[i : i + self.max_batch_size]
             crops = [elem["crop"] for elem in batch]
-
-            self.timer.start_timer("batch_process")
+            self.timer.start_timer("batch_process","process_elements")
             batch_results = processsor.batch_process(crops)
             self.timer.stop_timer("batch_process")
-
             for j, result_text in enumerate(batch_results):
                 elem = batch[j]
                 del elem["crop"]

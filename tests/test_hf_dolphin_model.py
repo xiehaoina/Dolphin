@@ -21,7 +21,7 @@ class TestHFDolphinModel(unittest.TestCase):
         """Set up the test case by mocking the model and processor loading."""
         # Config
         self.config = OmegaConf.create({
-            "model_id_or_path": "/Users/bytedance/git/ocr/Dolphin/hf_model"
+            "model_id_or_path": "./model_weight/Dolphin/hf_model"
         })
 
         # Instantiate the model

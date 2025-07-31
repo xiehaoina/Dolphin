@@ -8,10 +8,11 @@ from unittest.mock import MagicMock, patch
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, project_root)
 
-from src.models.chat.factory import ChatModelFactory
+from src.models.factory import ModelFactory
 from src.models.chat.dolphin.raw_dolphin_model import RawDolphinModel
 from src.models.chat.dolphin.hf_dolphin_model import HFDolphinModel
 from src.models.chat.gateway.gateway_model import GatewayModel
+from src.models.layout.doclayout_yolo.DocLayoutYOLO import DocLayoutYOLOModel
 
 class TestChatModelFactory(unittest.TestCase):
     """
@@ -20,7 +21,7 @@ class TestChatModelFactory(unittest.TestCase):
 
     def setUp(self):
         """Set up the test case."""
-        self.factory = ChatModelFactory()
+        self.factory = ModelFactory()
         # Since it's a singleton, clear the cache for each test
         self.factory._models = {}
 
@@ -39,7 +40,7 @@ class TestChatModelFactory(unittest.TestCase):
         """
         Tests the creation of an HFDolphinModel instance.
         """
-        config = OmegaConf.create({"model_id_or_path": "/Users/bytedance/git/ocr/Dolphin/hf_model"})
+        config = OmegaConf.create({"model_id_or_path": "./model_weight/Dolphin/hf_model"})
         model = self.factory.create_model("hf_dolphin", config)
         self.assertIsInstance(model, HFDolphinModel)
         #mock_init.assert_called_once_with(config)
@@ -55,6 +56,17 @@ class TestChatModelFactory(unittest.TestCase):
                                  "max_concurrency": 30})
         model = self.factory.create_model("gateway", config)
         self.assertIsInstance(model, GatewayModel)
+        
+    #@patch('src.models.layout.doclayout_yolo.DocLayoutYOLOModel.__init__', return_value=None)
+    def test_create_doclayout_yolo_model(self, mock_init = MagicMock()) :
+        """
+        Tests the creation of a GatewayModel instance.
+        """
+        config = OmegaConf.create({"device": "cpu", 
+                                 "weight": "./model_weight/Structure/layout_zh.pt"
+                                 })
+        model = self.factory.create_model("doclayout_yolo", config)
+        self.assertIsInstance(model, DocLayoutYOLOModel)
         #mock_init.assert_called_once_with(config)
 
     def test_invalid_model_type(self):
@@ -66,7 +78,7 @@ class TestChatModelFactory(unittest.TestCase):
 
     def test_singleton_instance(self):
         """Tests that the factory is a singleton."""
-        factory1 = ChatModelFactory()
+        factory1 = ModelFactory()
         self.assertIs(factory1, self.factory)
 
     @patch('src.models.chat.dolphin.raw_dolphin_model.RawDolphinModel.__init__', return_value=None)

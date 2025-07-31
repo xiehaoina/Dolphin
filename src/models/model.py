@@ -1,9 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import Any, List
-from src.models.model import Model
+from typing import Any, List, Union
 from PIL import Image
 
-class ChatModel(Model):
+class Model(ABC):
     """
     Abstract base class for a multi-modal Vision Language Model (VLM).
     
@@ -33,7 +32,7 @@ class ChatModel(Model):
         pass
 
     @abstractmethod
-    def inference(self, prompt: str, image: Image.Image) -> str:
+    def inference(self, *args, **kwargs) -> Any:
         """
         Performs inference on a single prompt and image.
 
@@ -47,7 +46,7 @@ class ChatModel(Model):
         pass
 
     @abstractmethod
-    def batch_inference(self, prompts: List[str], images: List[Image.Image]) -> List[str]:
+    def batch_inference(self, *args, **kwargs) -> Any:
         """
         Performs inference on a batch of prompts and images.
 

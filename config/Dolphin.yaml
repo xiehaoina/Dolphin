@@ -1,6 +1,6 @@
 model:
-  model_name_or_path: "./checkpoints/dolphin_model.bin"
-  tokenizer_path: "./checkpoints/dolphin_tokenizer.json"
+  model_name_or_path: "./model_weight/Dolphin/checkpoints/dolphin_model.bin"
+  tokenizer_path: "./model_weight/Dolphin/checkpoints/dolphin_tokenizer.json"
   extra_answer_tokens: True   # add <Answer/> token
   max_length: 4096
   decoder_layer: 10

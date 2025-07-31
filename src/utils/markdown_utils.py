@@ -7,6 +7,8 @@ import re
 import base64
 from typing import List, Dict, Any, Optional
 
+from src.utils.enums.doc_element_type import BlockType
+
 
 """
     Example input:
@@ -38,15 +40,9 @@ class MarkdownConverter:
     def __init__(self):
         # Define heading levels for different section types
         self.heading_levels = {
-            'title': '#',
-            'sec': '##',
-            'sub_sec': '###'
-        }
-        
-        # Define which labels need special handling
-        self.special_labels = {
-            'tab', 'fig', 'title', 'sec', 'sub_sec', 
-            'list', 'formula', 'reference', 'alg'
+            BlockType.Title.value: '#',
+            BlockType.Section.value: '##',
+            BlockType.SubSection.value: '###'
         }
     
     def try_remove_newline(self, text: str) -> str:
@@ -340,30 +336,29 @@ class MarkdownConverter:
         """
         try:
             markdown_content = []
-            
             for section_count, result in enumerate(recognition_results):
                 try:
                     label = result.get('label', '')
                     text = result.get('text', '').strip()
-                    
+                   
                     # Skip empty text
                     if not text:
                         continue
                         
                     # Handle different content types
-                    if label in {'title', 'sec', 'sub_sec'}:
+                    if label in {BlockType.Title.value, BlockType.Section.value, BlockType.SubSection.value}:
                         markdown_content.append(self._handle_heading(text, label))
-                    elif label == 'list':
+                    elif label == BlockType.List.value:
                         markdown_content.append(self._handle_list_item(text))
-                    elif label == 'fig':
+                    elif label == BlockType.Image.value:
                         markdown_content.append(self._handle_figure(text, section_count))
-                    elif label == 'tab':
+                    elif label == BlockType.Table.value:
                         markdown_content.append(self._handle_table(text))
-                    elif label == 'alg':
+                    elif label == BlockType.Algorithm.value:
                         markdown_content.append(self._handle_algorithm(text))
-                    elif label == 'formula':
+                    elif label == BlockType.Formula.value:
                         markdown_content.append(self._handle_formula(text))
-                    elif label not in self.special_labels:
+                    else:
                         # Handle regular text (paragraphs, etc.)
                         processed_text = self._handle_text(text)
                         markdown_content.append(f"{processed_text}\n\n")

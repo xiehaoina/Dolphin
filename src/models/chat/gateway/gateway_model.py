@@ -6,7 +6,7 @@ from PIL import Image
 from typing import List, Any
 from loguru import logger
 
-from src.utils.load_image import load_image, encode_image_base64
+from src.utils.image_process.load_image import load_image, encode_image_base64
 from src.models.chat.chat_model import ChatModel
 from src.utils.perf_timer import PerfTimer
 
@@ -28,11 +28,19 @@ class GatewayModel(ChatModel):
                     - model_name (str): The name of the model to use.
                     - api_key (str, optional): The API key.
                     - max_concurrency (int, optional): Max concurrent requests.
+                    - temperature (float, optional): Sampling temperature. Defaults to 1.0.
+                    - top_p (float, optional): Nucleus sampling parameter. Defaults to 1.0.
         """
         self.model_name = getattr(config, 'model_name', 'default-model')
         self.api_key = getattr(config, 'api_key', None)
         self.base_url = getattr(config, 'url', None)
         self.max_concurrency = getattr(config, 'max_concurrency', 10)
+        self.temperature = getattr(config, 'temperature', 1.0)
+        self.top_p = getattr(config, 'top_p', 0.7)
+        self.thinking = getattr(config, 'thinking','enabled')
+        self.response_format = getattr(config, 'response_format','text')
+        self.timeout = getattr(config, 'timeout', 600)
+
         debug = getattr(config, "debug", True)
         self.timer = PerfTimer(debug=debug)
 
@@ -42,9 +50,9 @@ class GatewayModel(ChatModel):
         self.client = OpenAI(
             api_key=self.api_key,
             base_url=self.base_url,
-            http_client=httpx.Client(timeout=120)
+            http_client=httpx.Client(timeout=self.timeout)
         )
-        self.async_client = httpx.AsyncClient(timeout=120)
+        self.async_client = httpx.AsyncClient(timeout=self.timeout)
         self.validate()
 
     def validate(self) -> None:
@@ -88,10 +96,23 @@ class GatewayModel(ChatModel):
                                 },
                                 {"type": "text", "text": prompt},
                             ],
+                            
                         }
                     ]
                     response = self.client.chat.completions.create(
-                        model=self.model_name, messages=messages, timeout=120
+                        model=self.model_name,
+                        messages=messages,
+                        timeout=self.timeout,
+                        temperature=self.temperature,
+                        top_p=self.top_p,
+                        extra_body={
+                            "thinking": {
+                                "type":self.thinking
+                                },
+                            "response_format": {
+                                "type": self.response_format
+                                },
+                        }
                     )
                     self.timer.stop_timer("vlm_inference_call")
                     #logger.debug(f"VLM image base64 size:{len(img_base64)}")

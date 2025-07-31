@@ -15,6 +15,8 @@ class BlockType(enum.Enum):
     Seal = 'seal'
     Watermark = 'watermark'
     Section = 'Section'
+    SubSection = 'SubSection'
+    Algorithm = 'Algorithm'
     Unknown = 'unknown'
 
 class ContentType(enum.Enum):
