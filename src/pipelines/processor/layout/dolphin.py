@@ -6,7 +6,7 @@ from loguru import logger
 
 from src.models.chat.chat_model import ChatModel
 from src.pipelines.processor.processor import Processor
-from src.utils.enums.doc_element_type import BlockType
+from src.utils.enums.doc_element_type import SpanType
 from src.utils.utils import (
     process_coordinates,
     prepare_image,
@@ -91,6 +91,7 @@ class DolphinLayoutProcessor(Processor):
                         "label": self._to_block_type(label),
                         "bbox": [orig_x1, orig_y1, orig_x2, orig_y2],
                         "reading_order": reading_order,
+                        "score": None,
                     }
                     elements.append(element_info)
                 reading_order += 1
@@ -113,20 +114,20 @@ class DolphinLayoutProcessor(Processor):
     def _to_block_type(self, label: str) -> str:
         """Converts a raw model label to a structured BlockType value."""
         label_map = {
-            'tab': BlockType.Table,
-            'fig': BlockType.Image,
-            'title': BlockType.Title,
-            'sec': BlockType.Section,
-            'sub_sec': BlockType.SubSection,
-            'list': BlockType.List,
-            'formula': BlockType.Formula,
-            'reference': BlockType.Text,
-            'alg': BlockType.Algorithm,
-            'para': BlockType.Text,
-            'header': BlockType.Header,
-            'footer': BlockType.Footer,
+            'tab': SpanType.Table,
+            'fig': SpanType.Image,
+            'title': SpanType.Title,
+            'sec': SpanType.Section,
+            'sub_sec': SpanType.SubSection,
+            'list': SpanType.List,
+            'formula': SpanType.Formula,
+            'reference': SpanType.Text,
+            'alg': SpanType.Algorithm,
+            'para': SpanType.Text,
+            'header': SpanType.Header,
+            'footer': SpanType.Footer,
         }
-        block_type = label_map.get(label, BlockType.Unknown)
-        if block_type == BlockType.Unknown:
+        block_type = label_map.get(label, SpanType.Unknown)
+        if block_type == SpanType.Unknown:
             logger.warning(f"Unknown label '{label}' encountered, mapping to 'unknown'.")
         return block_type.value

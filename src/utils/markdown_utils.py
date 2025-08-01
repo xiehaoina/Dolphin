@@ -7,7 +7,7 @@ import re
 import base64
 from typing import List, Dict, Any, Optional
 
-from src.utils.enums.doc_element_type import BlockType
+from src.utils.enums.doc_element_type import SpanType
 
 
 """
@@ -40,9 +40,9 @@ class MarkdownConverter:
     def __init__(self):
         # Define heading levels for different section types
         self.heading_levels = {
-            BlockType.Title.value: '#',
-            BlockType.Section.value: '##',
-            BlockType.SubSection.value: '###'
+            SpanType.Title.value: '#',
+            SpanType.Section.value: '##',
+            SpanType.SubSection.value: '###'
         }
     
     def try_remove_newline(self, text: str) -> str:
@@ -346,17 +346,17 @@ class MarkdownConverter:
                         continue
                         
                     # Handle different content types
-                    if label in {BlockType.Title.value, BlockType.Section.value, BlockType.SubSection.value}:
+                    if label in {SpanType.Title.value, SpanType.Section.value, SpanType.SubSection.value}:
                         markdown_content.append(self._handle_heading(text, label))
-                    elif label == BlockType.List.value:
+                    elif label == SpanType.List.value:
                         markdown_content.append(self._handle_list_item(text))
-                    elif label == BlockType.Image.value:
+                    elif label == SpanType.Image.value:
                         markdown_content.append(self._handle_figure(text, section_count))
-                    elif label == BlockType.Table.value:
+                    elif label == SpanType.Table.value:
                         markdown_content.append(self._handle_table(text))
-                    elif label == BlockType.Algorithm.value:
+                    elif label == SpanType.Algorithm.value:
                         markdown_content.append(self._handle_algorithm(text))
-                    elif label == BlockType.Formula.value:
+                    elif label == SpanType.Formula.value:
                         markdown_content.append(self._handle_formula(text))
                     else:
                         # Handle regular text (paragraphs, etc.)
