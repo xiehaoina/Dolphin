@@ -25,9 +25,9 @@ class DocLayoutYOLOProcessor(Processor):
         """
         self.model = model
     
-    def batch_process(self, images: List[Image.Image]) -> List[List[Dict]]:
+    def batch_process(self, images: List[Image.Image], add_reading_order: bool = True) -> List[List[Dict]]:
         raise NotImplementedError("Batch processing is not implemented for this processor.")
-    def process(self, image: Image.Image) -> List[Dict]:
+    def process(self, image: Image.Image, add_reading_order: bool = True) -> List[Dict]:
         """
         Processes a single image to perform layout analysis.
         This method takes a PIL image, sends it to the model for layout inference,
@@ -41,11 +41,11 @@ class DocLayoutYOLOProcessor(Processor):
         # Inference the layout from the image
         raw_dict = self.model.inference(image)
         image  = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
-        elements = self._post_process(raw_dict, image)
+        elements = self._post_process(raw_dict, image, add_reading_order)
         logger.info(f"Extractehttps://file+.vscode-resource.vscode-cdn.net/Users/bytedance/git/ocr/Dolphin/results/volc/bill/hn1/bbox_images/layout.png?version%3D1754022229084d {len(elements)} elements from the image.")
         return elements
     def _post_process(
-        self, raw_dict: Dict, image: Image
+        self, raw_dict: Dict, image: Image.Image, add_reading_order: bool = True
     ) -> Dict:      
         elements = []
         reading_order = 0
@@ -63,7 +63,7 @@ class DocLayoutYOLOProcessor(Processor):
                     "crop": pil_crop,
                     "label": self._to_block_type(category_id),
                     "bbox": [xmin, ymin, xmax, ymax],
-                    "reading_order": reading_order,
+                    "reading_order": reading_order if add_reading_order else None,
                     "score": score,
                 }
                 elements.append(element_info)

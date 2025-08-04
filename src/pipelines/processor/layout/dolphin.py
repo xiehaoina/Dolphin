@@ -25,9 +25,9 @@ class DolphinLayoutProcessor(Processor):
         """
         self.model = model
     
-    def batch_process(self, images: List[Image.Image]) -> List[List[Dict]]:
+    def batch_process(self, images: List[Image.Image], add_reading_order: bool = True) -> List[List[Dict]]:
         raise NotImplementedError("Batch processing is not implemented for this processor.")
-    def process(self, image: Image.Image) -> List[Dict]:
+    def process(self, image: Image.Image, add_reading_order: bool = True) -> List[Dict]:
         """
         Processes a single image to perform layout analysis.
         This method takes a PIL image, sends it to the model for layout inference,
@@ -45,11 +45,11 @@ class DolphinLayoutProcessor(Processor):
         # Prepare image for cropping
         padded_image, dims = prepare_image(image)
         # Post-process the layout string to extract elements
-        elements = self._post_process(layout_str, padded_image, dims)
+        elements = self._post_process(layout_str, padded_image, dims, add_reading_order)
         logger.info(f"Extracted {len(elements)} elements from the image.")
         return elements
     def _post_process(
-        self, layout_str: str, padded_image: Any, dims: Dict
+        self, layout_str: str, padded_image: Any, dims: Dict, add_reading_order: bool = True
     ) -> List[Dict]:
         """
         Post-processes the raw layout string from the model.
@@ -90,7 +90,7 @@ class DolphinLayoutProcessor(Processor):
                         "crop": pil_crop,
                         "label": self._to_block_type(label),
                         "bbox": [orig_x1, orig_y1, orig_x2, orig_y2],
-                        "reading_order": reading_order,
+                        "reading_order": reading_order if add_reading_order else None,
                         "score": None,
                     }
                     elements.append(element_info)

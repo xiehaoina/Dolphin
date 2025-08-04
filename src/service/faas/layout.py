@@ -20,7 +20,7 @@ layout_processor = DocLayoutYOLOProcessor(model)
 def handler(event, context):
     logging.info(f"received new request, event content: {event}")
     request = json.loads(event['body'])
-    elements = layout_processor.process(load_image(request['image_url']['url']))
+    elements = layout_processor.process(load_image(request['image_url']['url']), add_reading_order=False)
     for j, _ in enumerate(elements):
         elem = elements[j]
         del elem["crop"]
