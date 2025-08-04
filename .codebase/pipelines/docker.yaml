@@ -1,9 +1,9 @@
 name: Build OCR Dolphin
 trigger:
   change:
-    branches: [ "master", "release/**" ]
+    branches: [ "master", "develop","release/**" ]
   push:
-    branches: [ "!master", "develop","!release/**" ]
+    branches: [ "!master", "!develop","!release/**" ]
   manual:
     branches: [ "*" ]
 jobs:
@@ -35,16 +35,34 @@ jobs:
       - id: buildkit
         image: hub.byted.org/pipeline/buildkit
 
+  build_release_image:
+    image: hub.byted.org/codebase/ci_go_1_18:latest
+    envs:
+      ARCH: amd64
+    depends: [ prepare ]
+    steps:
+      - id: build_docker_image
+        uses: actions/buildkit
+        inputs:
+          context: .
+          dockerfile: Dockerfile
+          build-args:
+            - BUILD_FROM=hub.byted.org/compile/security.research.compiler_go1.19.5:e595b09f5f37d103c040cc08737ce04e
+            - RUN_FROM=python:3.10-slim
+          output: registry
+          arch: ${{ Envs.ARCH }}
+          image-ref: ${{ VOLC_RELEASE_DOCKER_REGISTRY }}/agent/dolphin:${{Event.Ref.Name}}-${{Head.SHA[0:6]}}-${{Jobs.prepare.Steps.init.Outputs.now}}
+          image-registry-auth: ${{ VOLC_RELEASE_DOCKER_AUTH }}
+    services:
+      - id: buildkit
+        image: hub.byted.org/pipeline/buildkit
+
   build_online_image:
     image: hub.byted.org/codebase/ci_go_1_18:latest
     envs:
       ARCH: amd64
     depends: [ prepare ]
     steps:
-      - id: go_mod_vendor
-        commands:
-          - go clean -modcache
-          - go mod vendor
       - id: build_docker_image
         uses: actions/buildkit
         inputs:

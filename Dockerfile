@@ -1,5 +1,5 @@
 # 使用官方Python镜像作为基础镜像
-FROM python:3.10-slim
+FROM hub.byted.org/base/security.debian12-slim.python310:latest
 
 # 安装系统依赖（解决OpenCV的libGL错误）
 RUN apt-get update && apt-get install -y --no-install-recommends \

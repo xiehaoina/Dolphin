@@ -10,8 +10,8 @@ from src.utils.image_process.load_image import load_image,encode_image_base64
 
 logging.basicConfig(level=logging.INFO)
 DEVICE = os.getenv('DEVICE', 'cpu')
-MODEL_PATH = os.getenv('MODEL_PATH', '../../../model_weight/Structure/layout_zh.pt')
-config = OmegaConf.create({"weight": os.path.abspath(os.path.join(os.path.dirname(__file__), MODEL_PATH)),
+WEIGHT_PATH = os.getenv('WEIGHT_PATH', '../../../model_weight/Structure/layout_zh.pt')
+config = OmegaConf.create({"weight": os.path.abspath(os.path.join(os.path.dirname(__file__), WEIGHT_PATH)),
                            "device": DEVICE})
 factory = ModelFactory()
 model = factory.create_model("doclayout_yolo", config)
