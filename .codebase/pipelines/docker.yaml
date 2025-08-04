@@ -19,10 +19,6 @@ jobs:
       ARCH: amd64
     depends: [ prepare ]
     steps:
-      - id: go_mod_vendor
-        commands:
-          - go clean -modcache
-          - go mod vendor
       - id: build_docker_image
         uses: actions/buildkit
         inputs:
