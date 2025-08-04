@@ -2,9 +2,11 @@ from typing import Tuple, Dict
 from fastapi import Request
 import json
 import os
+from loguru import logger
 
-API_KEY = os.getenv('API_KEY', '123456')
 
+API_KEY = os.getenv('API_KEY','123456')
+logger.info(f"API_KEY: {API_KEY}")
 def check_api_key(request: Request) -> Tuple[bool, Dict]:
     """验证API密钥，返回(是否有效, 错误响应字典)"""
     auth_header = request.headers.get("Authorization")
