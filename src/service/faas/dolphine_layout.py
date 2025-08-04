@@ -16,7 +16,7 @@ model = factory.create_model("hf_dolphin", config)
 layout_processor = DolphinLayoutProcessor(model)
 
 def handler(event, context):
-    logging.info(f"received new request, event content: {event}")
+    logging.debug(f"received new request, event content: {event}")
     context.perf_timer.start_timer("remote_call")
     request = json.loads(event['body'])
     elements = layout_processor.process(load_image(request['image_url']['url']), add_reading_order=False)
@@ -29,8 +29,6 @@ def handler(event, context):
         'headers': {
             'Content-Type': 'application/json'
         },
-        'body': json.dumps({
-            'elements': elements
-        })
+        'body': json.dumps(elements)
     }
     return response
