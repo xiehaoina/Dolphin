@@ -2,14 +2,61 @@ import os
 import base64
 import unittest
 import asyncio
+import json
+from mcp.client.session import ClientSession
 from mcp.client.session_group import ClientSessionGroup
+from contextlib import AsyncExitStack
+from mcp.client.streamable_http import streamablehttp_client
 from requests import session
-
+from typing import Optional
 
 # 测试配置
 MCP_SERVER_URL = "http://localhost:8001"
 TEST_IMAGE_PATH = os.path.join(os.path.dirname(__file__), 'images', 'bill.png')
 AUTH_TOKEN = os.getenv('MCP_AUTH_TOKEN', 'default_test_token')
+
+
+class MCPClient:
+    def __init__(self):
+        # Initialize session and client objects
+        self.session: Optional[ClientSession] = None
+        self.exit_stack = AsyncExitStack()
+        self._streams_context = None
+        self._session_context = None
+
+    async def connect_to_streamable_server(self, server_url: str):
+        """Connect to an MCP server running with SSE transport"""
+        # 初始化AsyncExitStack用于管理异步上下文
+        self._exit_stack = AsyncExitStack()
+
+        # 获取流并保存上下文引用
+        self._streams_context = streamablehttp_client(url=server_url)
+        streams = await self._exit_stack.enter_async_context(self._streams_context)
+
+        # 初始化客户端会话并设置30秒超时
+        self._session_context = ClientSession(*streams)
+        self.session: ClientSession = await self._exit_stack.enter_async_context(self._session_context)
+
+        # 初始化会话
+        await self.session.initialize()
+
+        # 列出可用工具验证连接
+        print("Initialized SSE client...")
+        print("Listing tools...")
+        response = await self.session.list_tools()
+        tools = response.tools
+        print("\nConnected to server with tools:", [tool.name for tool in tools])
+
+    async def cleanup(self):
+        """Properly clean up the session and streams"""
+        if hasattr(self, '_exit_stack'):
+            await self._exit_stack.aclose()
+
+    async def call_tool(self, tool_name, tool_args):
+        """调用指定工具并返回结果"""
+        return await self.session.call_tool(tool_name, tool_args)
+
+    
 
 class TestMcpServerIntegration(unittest.IsolatedAsyncioTestCase):
     @classmethod
@@ -20,97 +67,65 @@ class TestMcpServerIntegration(unittest.IsolatedAsyncioTestCase):
             cls.TEST_IMAGE_BASE64 = base64.b64encode(f.read()).decode('utf-8')
 
     async def asyncSetUp(self):
-        """异步测试准备，初始化ClientSessionGroup并连接服务器"""
-        # 按照示例创建会话组（无base_url参数）
-        self.session_group = ClientSessionGroup()
-
-        # 连接到MCP服务器（修复参数传递方式）
-        self.session = self.session_group.connect_to_server(
-            url=MCP_SERVER_URL,
-            headers={
-                'Authorization': f'Bearer {AUTH_TOKEN}',
-                'Content-Type': 'application/json'
-            },
-            timeout=30
-        )
-        print(self.session_group.resources)
+        self._exit_stack = AsyncExitStack()
+        self.mcp_client = MCPClient()
+        await self.mcp_client.connect_to_streamable_server(MCP_SERVER_URL)
 
     async def asyncTearDown(self):
-        """异步测试清理，关闭会话组"""
-        await self.session.close()
+        await self._exit_stack.aclose()
 
     async def test_valid_url_input(self):
-        """测试URL模式的图像输入（异步测试）"""
-        # 从会话组获取会话（示例中的异步上下文管理）
-        
-        endpoint = f"/v1/pipeline/fast_layout"
-        payload = {
-            "body": {
-                "image_url": {"url": "https://example.com/test-document.jpg"}
-            }
-        }
-
-        # 异步发送请求
-        response = await self.session.post(endpoint, json=payload)
-        self.assertEqual(response.status_code, 200, f"MCP服务请求失败: {await response.text()}")
-        result = await response.json()
+        """测试URL模式的图像输入"""
+        # 使用MCPClient调用fast_layout工具
+        result = await self.mcp_client.call_tool("fast_layout", {
+            "image_url": {"url": "https://example.com/test-document.jpg"}
+        })
         self._validate_response(result)
 
     async def test_valid_base64_input(self):
-        """测试Base64模式的图像输入（异步测试）"""
-        endpoint = f"/v1/pipeline/slow_layout"
-        payload = {
-            "body": {
-                "image_url": {
-                    "data": f"data:image/png;base64,{self.TEST_IMAGE_BASE64}"
-                }
+        """测试Base64模式的图像输入"""
+        # 使用MCPClient调用slow_layout工具
+        result = await self.mcp_client.call_tool("slow_layout", {
+            "image_url": {
+                "data": f"data:image/png;base64,{self.TEST_IMAGE_BASE64}"
             }
-        }
-
-        response = await self.session.post(endpoint, json=payload)
-        self.assertEqual(response.status_code, 200, f"MCP服务请求失败: {await response.text()}")
-        result = await response.json()
+        })
         self._validate_response(result)
 
-    def test_invalid_image_url_format(self):
+    async def test_invalid_image_url_format(self):
         """测试无效的image_url格式处理"""
-        # 修复：使用完整URL而非base_url+endpoint
-        endpoint = f"{MCP_SERVER_URL}/v1/pipeline/fast_layout"
-        payload = {
-            "body": {
+        try:
+            await self.mcp_client.call_tool("fast_layout", {
                 "image_url": {"invalid_key": "https://example.com/image.jpg"}
-            }
-        }
+            })
+            self.fail("未捕获到无效image_url格式错误")
+        except Exception as e:
+            error_info = json.loads(str(e))
+            self.assertIn("无效的image_url格式", error_info.get("error", ""))
 
-        response = self.session.post(endpoint, json=payload)
-        self.assertEqual(response.status_code, 400, f"期望400错误，实际状态码: {response.status_code}")
-        error_info = response.json()
-        self.assertIn("无效的image_url格式", error_info.get("error", ""))
-
-    def test_invalid_mode_parameter(self):
+    async def test_invalid_mode_parameter(self):
         """测试无效的mode参数处理"""
-        # 修复：使用完整URL而非base_url+endpoint
-        endpoint = f"{MCP_SERVER_URL}/v1/pipeline/invalid_mode_layout"
-        payload = {
-            "body": {
+        # 使用MCPClient调用不存在的工具
+        try:
+            await self.mcp_client.call_tool("invalid_mode_layout", {
                 "image_url": {"url": "https://example.com/image.jpg"}
-            }
-        }
+            })
+            self.fail("未捕获到无效mode错误")
+        except Exception as e:
+            error_info = json.loads(str(e))
+            self.assertEqual(error_info.get("status_code"), 404)
 
-        response = self.session.post(endpoint, json=payload)
-        self.assertEqual(response.status_code, 404, f"期望404错误，实际状态码: {response.status_code}")
-
-    def test_empty_image_url(self):
+    async def test_empty_image_url(self):
         """测试空image_url参数处理"""
-     
-        # 修复：使用完整URL而非base_url+endpoint
-        endpoint = f"{MCP_SERVER_URL}/v1/pipeline/fast_layout"
-        payload = {"body": {"image_url": None}}
-
-        response = self.session.post(endpoint, json=payload)
-        self.assertEqual(response.status_code, 400, f"期望400错误，实际状态码: {response.status_code}")
-        error_info = response.json()
-        self.assertIn("image_url参数不能为空", error_info.get("error", ""))
+        # 使用MCPClient调用工具传递空image_url
+        try:
+            await self.mcp_client.call_tool("fast_layout", {
+                "image_url": None
+            })
+            self.fail("未捕获到空image_url错误")
+        except Exception as e:
+            error_info = json.loads(str(e))
+            self.assertIn("image_url参数不能为空", error_info.get("error", ""))
 
     def _validate_response(self, result):
         """验证响应结构和内容"""
@@ -123,6 +138,7 @@ class TestMcpServerIntegration(unittest.IsolatedAsyncioTestCase):
             self.assertIn("bbox", element)
             self.assertIn("reading_order", element)
             self.assertIn("score", element)
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
