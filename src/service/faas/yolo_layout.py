@@ -13,12 +13,12 @@ DEVICE = os.getenv('DEVICE', 'cpu')
 WEIGHT_PATH = os.getenv('WEIGHT_PATH', '../../../model_weight/Structure/layout_zh.pt')
 config = OmegaConf.create({"weight": os.path.abspath(os.path.join(os.path.dirname(__file__), WEIGHT_PATH)),
                            "device": DEVICE})
-factory = ModelFactory()
-model = factory.create_model("doclayout_yolo", config)
-layout_processor = DocLayoutYOLOProcessor(model)
+
 
 def handler(event, context):
     logging.debug(f"received new request, event content: {event}")
+    model = context.model_factory.create_model("doclayout_yolo", config)
+    layout_processor = DocLayoutYOLOProcessor(model)
     context.perf_timer.start_timer("remote_call")
     request = json.loads(event['body'])
     elements = layout_processor.process(load_image(request['image_url']['url']), add_reading_order=False)

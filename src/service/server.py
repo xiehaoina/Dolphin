@@ -12,10 +12,12 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 from src.service.faas import yolo_layout,dolphine_layout
 from src.service.auth import check_api_key
 from src.utils.perf_timer import PerfTimer
+from src.models.factory import ModelFactory
 
 app = FastAPI(title="document extraction Service")
 perf_timer = PerfTimer()
 app.state.perf_timer = perf_timer
+app.state.model_factory  = ModelFactory()
 # 添加依赖项封装，便于复用
 async def verify_api_key(request: Request) -> bool:
     is_valid, error_response = check_api_key(request)

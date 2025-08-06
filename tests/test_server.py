@@ -5,11 +5,11 @@ import sys
 import requests  # 添加requests导入
 
 # 移除TestClient导入
-#from fastapi.testclient import TestClient
+from fastapi.testclient import TestClient
 # Add project root to the Python path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, project_root)
-#from src.service.server import app
+from src.service.server import app
 from src.utils.perf_timer import PerfTimer
 import pytest
 
@@ -22,10 +22,10 @@ class RealClient:
         full_url = f"{self.base_url.rstrip('/')}/{url.lstrip('/')}"
         return self.session.post(full_url, headers=headers, json=json)
     
-client = RealClient(base_url="http://sd286m9ufnav2uhs5jgng.apigateway-cn-beijing.volceapi.com/")
+#client = RealClient(base_url="http://sd286m9ufnav2uhs5jgng.apigateway-cn-beijing.volceapi.com/")
 
 
-#client = TestClient(app)
+client = TestClient(app)
 timer = PerfTimer()
 timer.enable()
 
@@ -51,15 +51,14 @@ def validate_response(response):
     assert response.status_code == 200, f"API请求失败: {response.text}"
     response_json = response.json()
     
-    assert 'elements' in response_json, "响应缺少elements字段"
-    assert isinstance(response_json['elements'], list), "elements应该是数组类型"
-    assert len(response_json['elements']) > 0, "未检测到任何文档元素"
+    assert isinstance(response_json, list), "elements应该是数组类型"
+    assert len(response_json) > 0, "未检测到任何文档元素"
     
-    for element in response_json['elements']:
+    for element in response_json:
         assert 'bbox' in element, "元素缺少bbox字段"
         assert 'label' in element, "元素缺少label字段"
         assert 'score' in element, "元素缺少score字段"
-    print(response_json)
+    #print(response_json)
     return response_json
 
 
@@ -90,4 +89,7 @@ def test_layout_api_endpoints(endpoint):
 
 if __name__ == '__main__':
     for endpoint in ['/v1/pipeline/fast_layout', '/v1/pipeline/slow_layout']:
+        timer.start_timer(endpoint)
         test_layout_api_endpoints(endpoint)
+        timer.stop_timer(endpoint)
+        timer.log_timings()

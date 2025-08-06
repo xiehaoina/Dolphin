@@ -5,7 +5,7 @@ import os
 from loguru import logger
 
 
-API_KEY = os.getenv('API_KEY','123456')
+API_KEY = os.getenv('API_KEY','sk-ocr-7Q2pZtR9xK4mF8sD3gH6jL1nP2bV5cX7rB9tY0kU3iO8fS2dA5sF7gH9jK')
 logger.info(f"API_KEY: {API_KEY}")
 def check_api_key(request: Request) -> Tuple[bool, Dict]:
     """验证API密钥，返回(是否有效, 错误响应字典)"""
