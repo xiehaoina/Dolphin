@@ -14,10 +14,17 @@ from src.service.auth import check_api_key
 from src.utils.perf_timer import PerfTimer
 from src.models.factory import ModelFactory
 
-app = FastAPI(title="document extraction Service")
+# 修改FastAPI初始化参数，禁用Swagger和ReDoc
+app = FastAPI(
+    title="document extraction Service",
+    docs_url=None,  # 禁用Swagger UI
+    redoc_url=None   # 禁用ReDoc文档
+)
 perf_timer = PerfTimer()
+model_factory = ModelFactory()
+# 将原来的两行注册代码替换为
 app.state.perf_timer = perf_timer
-app.state.model_factory  = ModelFactory()
+app.state.model_factory = model_factory
 # 添加依赖项封装，便于复用
 async def verify_api_key(request: Request) -> bool:
     is_valid, error_response = check_api_key(request)

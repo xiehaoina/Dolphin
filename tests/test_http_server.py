@@ -5,11 +5,11 @@ import sys
 import requests  # 添加requests导入
 
 # 移除TestClient导入
-from fastapi.testclient import TestClient
+#from fastapi.testclient import TestClient
 # Add project root to the Python path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, project_root)
-from src.service.server import app
+#from src.service.http_server import app
 from src.utils.perf_timer import PerfTimer
 import pytest
 
@@ -22,10 +22,10 @@ class RealClient:
         full_url = f"{self.base_url.rstrip('/')}/{url.lstrip('/')}"
         return self.session.post(full_url, headers=headers, json=json)
     
-#client = RealClient(base_url="http://sd286m9ufnav2uhs5jgng.apigateway-cn-beijing.volceapi.com/")
+client = RealClient(base_url="http://sd286m9ufnav2uhs5jgng.apigateway-cn-beijing.volceapi.com/")
 
 
-client = TestClient(app)
+#client = TestClient(app)
 timer = PerfTimer()
 timer.enable()
 
@@ -50,7 +50,6 @@ def validate_response(response):
     """验证API响应结构"""
     assert response.status_code == 200, f"API请求失败: {response.text}"
     response_json = response.json()
-    
     assert isinstance(response_json, list), "elements应该是数组类型"
     assert len(response_json) > 0, "未检测到任何文档元素"
     
@@ -60,7 +59,6 @@ def validate_response(response):
         assert 'score' in element, "元素缺少score字段"
     #print(response_json)
     return response_json
-
 
 
     

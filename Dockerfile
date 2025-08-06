@@ -25,4 +25,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 EXPOSE 8000
 
 # 设置启动命令
-CMD ["python", "/app/src/service/server.py"]
+CMD ["python", "/app/src/service/http_server.py"]

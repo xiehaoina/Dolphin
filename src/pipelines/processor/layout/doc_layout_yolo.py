@@ -42,7 +42,7 @@ class DocLayoutYOLOProcessor(Processor):
         raw_dict = self.model.inference(image)
         image  = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
         elements = self._post_process(raw_dict, image, add_reading_order)
-        logger.info(f"Extractehttps://file+.vscode-resource.vscode-cdn.net/Users/bytedance/git/ocr/Dolphin/results/volc/bill/hn1/bbox_images/layout.png?version%3D1754022229084d {len(elements)} elements from the image.")
+        logger.info(f"Extracte layout elements {len(elements)} from the image.")
         return elements
     def _post_process(
         self, raw_dict: Dict, image: Image.Image, add_reading_order: bool = True
